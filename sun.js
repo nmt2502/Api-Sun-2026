@@ -9,11 +9,21 @@ const STATE_FILE = "./state.json";
 const ALGO_FILE = "./ttoanmoi.txt";
 
 /* =======================
-   LOAD / SAVE STATE
+   UTILS
 ======================= */
+function getVNDate() {
+  const d = new Date();
+  d.setHours(d.getHours() + 7);
+  return d.toISOString().slice(0, 10);
+}
+
 function loadState() {
   if (!fs.existsSync(STATE_FILE)) {
-    return { lastPhien: null, cau: "", date: "" };
+    return {
+      lastPhien: null,
+      cau: "",
+      date: getVNDate()
+    };
   }
   return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
 }
@@ -27,12 +37,10 @@ function saveState(state) {
 ======================= */
 app.get("/api/sun/binhoi", async (req, res) => {
   try {
-    let state = loadState();
+    const state = loadState();
+    const today = getVNDate();
 
-    // Ngày hiện tại YYYY-MM-DD
-    const today = new Date().toISOString().slice(0, 10);
-
-    // ✅ Qua ngày mới reset cau
+    // ✅ reset cau đúng 0h VN
     if (state.date !== today) {
       state.cau = "";
       state.lastPhien = null;
@@ -40,20 +48,34 @@ app.get("/api/sun/binhoi", async (req, res) => {
       saveState(state);
     }
 
-    // Lấy dữ liệu gốc
+    // Lấy API gốc
     const { data } = await axios.get(
       "https://sunwinsaygex-pcl2.onrender.com/api/sun"
     );
 
-    // Chỉ thêm cau khi sang phiên mới
-    if (state.lastPhien !== data.phien) {
+    // =========================
+    // CẬP NHẬT CAU (KHÔNG TỤT)
+    // =========================
+    if (state.lastPhien === null) {
+      // chỉ set mốc, KHÔNG thêm cau
+      state.lastPhien = data.phien;
+      saveState(state);
+    } else if (data.phien > state.lastPhien) {
       const kyTu = data.ket_qua === "Tài" ? "T" : "X";
       state.cau += kyTu;
+
+      // giới hạn 30 ký tự
+      if (state.cau.length > 30) {
+        state.cau = state.cau.slice(-30);
+      }
+
       state.lastPhien = data.phien;
       saveState(state);
     }
 
-    // Đọc thuật toán (mỗi dòng 6 ký tự)
+    // =========================
+    // ĐỌC THUẬT TOÁN (6 KÝ TỰ)
+    // =========================
     const algorithms = fs
       .readFileSync(ALGO_FILE, "utf8")
       .split("\n")
@@ -65,21 +87,17 @@ app.get("/api/sun/binhoi", async (req, res) => {
     let du_doan = "";
     let do_tin_cay = "";
 
-    // ======================
-    // SO KHỚP THUẬT TOÁN
-    // ======================
+    // =========================
+    // SO KHỚP CAU
+    // =========================
     for (const line of algorithms) {
       if (state.cau.length >= line.length) continue;
 
-      // Check đuôi
-      if (line.endsWith(state.cau)) {
+      if (line.startsWith(state.cau)) {
         co_thuat_toan = true;
         dong_thuat_toan = line;
 
-        // Ký tự tiếp theo
-        const nextIndex = state.cau.length;
-        const nextChar = line[nextIndex];
-
+        const nextChar = line[state.cau.length];
         if (nextChar) {
           du_doan = nextChar === "T" ? "Tài" : "Xỉu";
           do_tin_cay = "80%";
@@ -89,7 +107,6 @@ app.get("/api/sun/binhoi", async (req, res) => {
     }
 
     res.json({
-      ID: "BiNhoi8386",
       phien: data.phien,
       xuc_xac_1: data.xuc_xac_1,
       xuc_xac_2: data.xuc_xac_2,
