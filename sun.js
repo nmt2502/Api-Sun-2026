@@ -13,7 +13,7 @@ const ALGO_FILE = "./ttoanmoi.txt";
 ======================= */
 function loadState() {
   if (!fs.existsSync(STATE_FILE)) {
-    return { lastPhien: null, cau: "" };
+    return { lastPhien: null, cau: "", date: "" };
   }
   return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
 }
@@ -27,15 +27,25 @@ function saveState(state) {
 ======================= */
 app.get("/api/sun/binhoi", async (req, res) => {
   try {
-    // Load state
     const state = loadState();
+
+    // Ngày hiện tại (YYYY-MM-DD)
+    const today = new Date().toISOString().slice(0, 10);
+
+    // ✅ Reset cau nếu qua ngày mới
+    if (state.date !== today) {
+      state.cau = "";
+      state.lastPhien = null;
+      state.date = today;
+      saveState(state);
+    }
 
     // Lấy API gốc
     const { data } = await axios.get(
       "https://sunwinsaygex-pcl2.onrender.com/api/sun"
     );
 
-    // Chỉ thêm cau khi qua phiên mới
+    // Chỉ thêm cau khi sang phiên mới
     if (state.lastPhien !== data.phien) {
       const kyTu = data.ket_qua === "Tài" ? "T" : "X";
       state.cau += kyTu;
@@ -55,13 +65,12 @@ app.get("/api/sun/binhoi", async (req, res) => {
     let du_doan = "";
     let do_tin_cay = "";
 
-    // So khớp thuật toán
+    // So khớp cau với thuật toán
     for (const line of algorithms) {
       if (state.cau.endsWith(line)) {
         co_thuat_toan = true;
         dong_thuat_toan = line;
 
-        // Dự đoán đơn giản
         const lastChar = line[line.length - 1];
         du_doan = lastChar === "T" ? "Xỉu" : "Tài";
         do_tin_cay = "88%";
@@ -69,7 +78,6 @@ app.get("/api/sun/binhoi", async (req, res) => {
       }
     }
 
-    // Trả kết quả
     res.json({
       ID: "BiNhoi8386",
       phien: data.phien,
@@ -95,5 +103,5 @@ app.get("/api/sun/binhoi", async (req, res) => {
    START SERVER
 ======================= */
 app.listen(PORT, () => {
-  console.log(`BINHOI API running on port ${PORT}`);
+  console.log("BINHOI API running");
 });
