@@ -81,7 +81,7 @@ function checkCauInFile(cau, lines) {
 
 // ===== DỰ ĐOÁN THEO THUẬT TOÁN =====
 function predictFromFile(cau, lines) {
-  const maxLen = Math.min(6, cau.length);
+  const maxLen = Math.min(8, cau.length);
 
   for (let len = maxLen; len >= 2; len--) {
     const sub = cau.slice(-len);
